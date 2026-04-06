@@ -20,6 +20,12 @@ jobs:
     runs-on: ubuntu-latest
     env:
       CURL: "curl -fsSL --retry 3 --retry-delay 2 --retry-connrefused"
+      SOURCE_DATA_FILE: "category-ru-all"
+      RELEASE_ARTIFACT_NAME: "geosite_rsc.dat"
+      RELEASE_GIT_NAME: ${{ vars.RELEASE_GIT_NAME || github.repository_owner }}
+      RELEASE_GIT_EMAIL: ${{ vars.RELEASE_GIT_EMAIL || format('{0}@users.noreply.github.com', github.repository_owner) }}
+      ROUTING_REPOSITORY: ${{ vars.ROUTING_REPOSITORY }}
+      PAT_FOR_ROUTING: ${{ secrets.PAT_FOR_ROUTING }}
     steps:
       - name: Checkout codebase
         uses: actions/checkout@v6
@@ -52,12 +58,28 @@ jobs:
         with:
           script: |
             const { DAILY_TAG } = process.env
-            await github.rest.git.createRef({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              ref: `refs/tags/${DAILY_TAG}`,
-              sha: context.sha
-            })
+            const owner = context.repo.owner
+            const repo = context.repo.repo
+
+            try {
+              await github.rest.git.getRef({
+                owner,
+                repo,
+                ref: `tags/${DAILY_TAG}`,
+              })
+              console.log(`Tag ${DAILY_TAG} already exists, skipping creation`)
+            } catch (error) {
+              if (error.status !== 404) {
+                throw error
+              }
+
+              await github.rest.git.createRef({
+                owner,
+                repo,
+                ref: `refs/tags/${DAILY_TAG}`,
+                sha: context.sha
+              })
+            }
 
       - name: Build geosite.dat
         run: |
@@ -66,7 +88,7 @@ jobs:
           rm -rf community/data /tmp/out
           mkdir -p community/data /tmp/out
 
-          cp -a ./data/. community/data/
+          cp "./data/${{ env.SOURCE_DATA_FILE }}" "community/data/${{ env.SOURCE_DATA_FILE }}"
 
           pushd community >/dev/null
           go run ./ -outputdir=/tmp/out
@@ -101,7 +123,7 @@ jobs:
 
           rm -rf "$work"
           mkdir -p "$out"
-          cp -a ./data/. "$work"/
+          cp "./data/${{ env.SOURCE_DATA_FILE }}" "$work/${{ env.SOURCE_DATA_FILE }}"
 
           find "$work" -path "$out" -prune -o -type f -print0 |
           while IFS= read -r -d '' f; do
@@ -177,7 +199,7 @@ jobs:
           out=/tmp/sing-box/rulesets
           rm -rf /tmp/sing-box
           mkdir -p "$src" "$out"
-          cp -a ./data/. "$src"/
+          cp "./data/${{ env.SOURCE_DATA_FILE }}" "$src/${{ env.SOURCE_DATA_FILE }}"
 
           find "$src" -type f -print0 |
           while IFS= read -r -d '' f; do
@@ -233,7 +255,7 @@ jobs:
           set -euo pipefail
           rm -rf release
           mkdir -p release/mihomo release/sing-box
-          cp ./geosite.dat release/
+          cp ./geosite.dat "release/${{ env.RELEASE_ARTIFACT_NAME }}"
           cp -a /tmp/mihomo/rulesets/.   release/mihomo/
           cp -a /tmp/sing-box/rulesets/. release/sing-box/
           rm -f /tmp/mihomo.tar.gz /tmp/sing-box.tar.gz
@@ -241,24 +263,24 @@ jobs:
           tar -czf release/sing-box.tar.gz -C release sing-box
           test -s release/mihomo.tar.gz
           test -s release/sing-box.tar.gz
-          sha256sum release/geosite.dat > release/geosite.dat.sha256
+          sha256sum "release/${{ env.RELEASE_ARTIFACT_NAME }}" > "release/${{ env.RELEASE_ARTIFACT_NAME }}.sha256"
 
       - name: MASTER Push to release branch and update master
         if: github.ref_name == 'master'
         run: |
           cd release || exit 1
           git init
-          git config --local user.name "hydraponique"
-          git config --local user.email "hydraponique@users.noreply.github.com"
+          git config --local user.name "${{ env.RELEASE_GIT_NAME }}"
+          git config --local user.email "${{ env.RELEASE_GIT_EMAIL }}"
           git checkout -b release
           git add -A
           git commit -m "Release ${{ env.DAILY_TAG }}"
           git remote add origin "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}"
           git push -f -u origin release
           cd .. || exit 1
-          git config --local user.name "hydraponique"
-          git config --local user.email "hydraponique@users.noreply.github.com"
-          git checkout master
+          git config --local user.name "${{ env.RELEASE_GIT_NAME }}"
+          git config --local user.email "${{ env.RELEASE_GIT_EMAIL }}"
+          git checkout -B master
           git add release/
           git commit -m "Release ${{ env.DAILY_TAG }}" || echo "No changes to commit"
           git push origin master
@@ -272,8 +294,8 @@ jobs:
           prerelease: false
           draft: false
           files: |
-            release/geosite.dat
-            release/geosite.dat.sha256
+            release/${{ env.RELEASE_ARTIFACT_NAME }}
+            release/${{ env.RELEASE_ARTIFACT_NAME }}.sha256
             release/*.tar.gz
 
       - name: MASTER Purge CDN for release and updated master branches
@@ -295,26 +317,26 @@ jobs:
           set -euo pipefail
           rm -rf release
           mkdir -p release/mihomo release/sing-box
-          cp ./geosite.dat release/
+          cp ./geosite.dat "release/${{ env.RELEASE_ARTIFACT_NAME }}"
           cp -a /tmp/mihomo/rulesets/.   release/mihomo/
           cp -a /tmp/sing-box/rulesets/. release/sing-box/
-          sha256sum release/geosite.dat > release/geosite.dat.sha256
+          sha256sum "release/${{ env.RELEASE_ARTIFACT_NAME }}" > "release/${{ env.RELEASE_ARTIFACT_NAME }}.sha256"
 
       - name: TEST Push to test-release branch & update test branch
         if: github.ref_name == 'test'
         run: |
           cd release || exit 1
           git init
-          git config --local user.name "hydraponique"
-          git config --local user.email "hydraponique@users.noreply.github.com"
+          git config --local user.name "${{ env.RELEASE_GIT_NAME }}"
+          git config --local user.email "${{ env.RELEASE_GIT_EMAIL }}"
           git checkout -b test-release
           git add -A
           git commit -m "Test Release $(date -u +%Y%m%d%H%M)"
           git remote add origin "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}"
           git push -f -u origin test-release
           cd .. || exit 1
-          git config --local user.name "hydraponique"
-          git config --local user.email "hydraponique@users.noreply.github.com"
+          git config --local user.name "${{ env.RELEASE_GIT_NAME }}"
+          git config --local user.email "${{ env.RELEASE_GIT_EMAIL }}"
           git checkout -B test
           git add release/
           git commit -m "Test Release $(date -u +%Y%m%d%H%M)" || echo "No changes to commit"
@@ -332,9 +354,9 @@ jobs:
           done
 
       - name: Trigger routing update
-        if: success() && github.ref_name == 'master'
+        if: success() && github.ref_name == 'master' && env.ROUTING_REPOSITORY != '' && env.PAT_FOR_ROUTING != ''
         uses: peter-evans/repository-dispatch@v3
         with:
-          token: ${{ secrets.PAT_FOR_ROUTING }}
-          repository: hydraponique/roscomvpn-routing
+          token: ${{ env.PAT_FOR_ROUTING }}
+          repository: ${{ env.ROUTING_REPOSITORY }}
           event-type: update-routing-configs
