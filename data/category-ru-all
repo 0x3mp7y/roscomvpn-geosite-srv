@@ -270,3 +270,39 @@ domain:yastat.net
 domain:yastatic.net
 domain:youla.io
 domain:zentotem.net
+
+# Source refresh: 2026-11-13
+# Existing custom rules are preserved; domains covered by suffix rules are omitted.
+
+# https://github.com/hydraponique/roscomvpn-geosite/tree/bb0e6b38617b4075c257c13c34d0d6f01c17f5da/data
+# category-ru + whitelist
+domain:anytimeru.com
+domain:api.sypexgeo.net
+domain:ip.sb
+domain:ipapi.is
+domain:iplocate.io
+domain:kinescope.io
+domain:kinescopecdn.net
+domain:medtrum.eu
+domain:redheadsound.studio
+domain:rsscenter.cloud
+
+# https://github.com/kirilllavrov/RU-domain-list-for-whitelist/tree/a4b4b032ce362c65c895546e826b720aa639709c/domains/ru
+# whitelist-ru and its included service lists
+domain:alfabank.st
+domain:envybox.io
+domain:giga.chat
+domain:meteum.ai
+domain:sberauto.com
+domain:shedevrum.ai
+domain:skcrtxr.com
+domain:sleza.media
+domain:sourcecraft.dev
+domain:targetads.io
+domain:zvuk-b2b.com
+domain:zvuk.com
+
+# https://github.com/hxehex/russia-mobile-internet-whitelist/blob/fad3653ebd4b212643774a4d10af3eb33838e4ff/whitelist.txt
+domain:edu.sirius.online
+domain:lizaalert.org
+domain:storage0.sirius.online
